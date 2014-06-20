@@ -1,6 +1,7 @@
 eclipse.preferences.version=1
 encoding//NN/HandlerNN.py=utf-8
 encoding//NN/NN.py=utf-8
+encoding//NN/NNLayer.py=utf-8
 encoding//RNN/HandlerRNN.py=utf-8
 encoding//RNN/RNN.py=utf-8
 encoding//SdA/HandlerSdA.py=utf-8

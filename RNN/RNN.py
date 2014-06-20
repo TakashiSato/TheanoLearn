@@ -26,7 +26,8 @@ class RNN(object):
     softmax : single softmax out, use cross-entropy error
 
     """
-    def __init__(self, input, n_in, n_hidden, n_out, truncated_num, activation=T.tanh):
+    def __init__(self, input, n_in, n_hidden, n_out, truncated_num, activation,
+                 numpy_rng):
 
         self.input = input
         self.activation = activation
@@ -47,7 +48,7 @@ class RNN(object):
         self.W = self.theta[param_idx:(param_idx + n_hidden ** 2)].reshape(
             (n_hidden, n_hidden))
         self.W.name = 'W'
-        W_init = np.asarray(np.random.uniform(
+        W_init = np.asarray(numpy_rng.uniform(
                               low=-np.sqrt(6. / (n_hidden + n_hidden)),
                               high=np.sqrt(6. / (n_hidden + n_hidden)),
                               size=(n_hidden, n_hidden)), dtype=theano.config.floatX)
@@ -57,7 +58,7 @@ class RNN(object):
         self.W_in = self.theta[param_idx:(param_idx + n_in * \
                                           n_hidden)].reshape((n_in, n_hidden))
         self.W_in.name = 'W_in'
-        W_in_init = np.asarray(np.random.uniform(
+        W_in_init = np.asarray(numpy_rng.uniform(
                                low=-np.sqrt(6. / (n_in + n_hidden)),
                                high=np.sqrt(6. / (n_in + n_hidden)),
                                size=(n_in, n_hidden)), dtype=theano.config.floatX)
@@ -68,36 +69,10 @@ class RNN(object):
                                            n_out)].reshape((n_hidden, n_out))
         self.W_out.name = 'W_out'
 
-        W_out_init = np.asarray(np.random.uniform(
+        W_out_init = np.asarray(numpy_rng.uniform(
                                low=-np.sqrt(6. / (n_hidden + n_out)),
                                high=np.sqrt(6. / (n_hidden + n_out)),
                                size=(n_hidden, n_out)), dtype=theano.config.floatX)
-#        # recurrent weights as a shared variable
-#        self.W = self.theta[param_idx:(param_idx + n_hidden ** 2)].reshape(
-#            (n_hidden, n_hidden))
-#        self.W.name = 'W'
-#        W_init = np.asarray(np.random.uniform(size=(n_hidden, n_hidden),
-#                                              low=-0.01, high=0.01),
-#                                              dtype=theano.config.floatX)
-#        param_idx += n_hidden ** 2
-#
-#        # input to hidden layer weights
-#        self.W_in = self.theta[param_idx:(param_idx + n_in * \
-#                                          n_hidden)].reshape((n_in, n_hidden))
-#        self.W_in.name = 'W_in'
-#        W_in_init = np.asarray(np.random.uniform(size=(n_in, n_hidden),
-#                                                 low=-0.01, high=0.01),
-#                                                 dtype=theano.config.floatX)
-#        param_idx += n_in * n_hidden
-#
-#        # hidden to output layer weights
-#        self.W_out = self.theta[param_idx:(param_idx + n_hidden * \
-#                                           n_out)].reshape((n_hidden, n_out))
-#        self.W_out.name = 'W_out'
-#
-#        W_out_init = np.asarray(np.random.uniform(size=(n_hidden, n_out),
-#                                                  low=-0.01, high=0.01),
-#                                                  dtype=theano.config.floatX)
         param_idx += n_hidden * n_out
 
         self.h0 = self.theta[param_idx:(param_idx + n_hidden)]
@@ -210,6 +185,7 @@ class MetaRNN(BaseEstimator):
                  L1_reg=0.00, L2_reg=0.00, activation='tanh',
                  learning_rate=0.01, learning_rate_decay=1,
                  final_momentum=0.9, initial_momentum=0.5, momentum_switchover=100,
+                 numpy_rng_seed=89677,
                  snapshot_every=None, snapshot_path='./models/tmp'):
 
         self.n_in = int(n_in)
@@ -227,6 +203,7 @@ class MetaRNN(BaseEstimator):
         self.initial_momentum = float(initial_momentum)
         self.final_momentum = float(final_momentum)
         self.momentum_switchover = int(momentum_switchover)
+        self.numpy_rng_seed = int(numpy_rng_seed)
         if snapshot_every is not None:
             self.snapshot_every = int(snapshot_every)
         else:
@@ -255,10 +232,13 @@ class MetaRNN(BaseEstimator):
         else:
             raise NotImplementedError
 
+        # generate numpy rng
+        numpy_rng = np.random.RandomState(self.numpy_rng_seed)
+
         self.estimator = RNN(input=self.x, n_in=self.n_in,
                              n_hidden=self.n_hidden, n_out=self.n_out,
                              truncated_num=self.truncated_num,
-                             activation=activation)
+                             activation=activation, numpy_rng=numpy_rng)
 
         self.predict = theano.function(inputs=[self.x, ],
                                        outputs=self.estimator.y_pred,
@@ -466,7 +446,7 @@ class MetaRNN(BaseEstimator):
                                                          weights=train_batch_sizes_for_each, axis=1)
                             el = np.r_[np.array([epoch]), this_train_each_loss]
                             self.errorlog = np.vstack((self.errorlog, el)) \
-                                                       if self.errorlog is not None \
+                                                       if self.errorlog != [] \
                                                        else np.array([el])
                             # エラーの推移をpngに保存
                             self.save_errorlog_png()
@@ -698,7 +678,7 @@ def test_real():
                     truncated_num=5,
                     learning_rate=0.01, learning_rate_decay=0.999999,
                     n_epochs=1000, batch_size=n_seq, activation='tanh',
-                    L2_reg=1e-3, snapshot_every=10000)
+                    L2_reg=1e-3, snapshot_every=10000, numpy_rng_seed=89677)
 #    model.fit(seq, targets, validate_every=100, optimizer='bfgs',
 #            show_norms = False, show_output = False)
     model.fit(seq, targets, validate_every=100, optimizer='sgd',

@@ -29,9 +29,6 @@ class NN(object):
         self.params = []
         self.n_layers = len(hidden_layers_sizes) + 1		# 中間層数 + 出力層数(1)
 
-        if not numpy_rng:
-            numpy_rng = np.random.RandomState(0)
-
         # ネットワークを構築
         for i in xrange(self.n_layers):
 
@@ -342,7 +339,7 @@ class MetaNN(BaseEstimator):
                                                      weights=train_batch_sizes_for_each, axis=1)
                         el = np.r_[np.array([epoch]), this_train_each_loss]
                         self.errorlog = np.vstack((self.errorlog, el)) \
-                                                   if self.errorlog is not None \
+                                                   if self.errorlog != [] \
                                                    else np.array([el])
                         # エラーの推移をpngに保存
                         self.save_errorlog_png()
