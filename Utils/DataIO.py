@@ -9,7 +9,6 @@ import math
 import matplotlib.pyplot as plt
 #from Kinematics import CalculateForwardKinematics
 from matplotlib.ticker import *
-from pybrain.rl.environments.twoplayergames.tasks.handicaptask import HandicapCaptureTask
 plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
 
 #===============================================================================
@@ -30,11 +29,12 @@ LEARNING_FILE_DIR = ['../../AnalysisData/debug']
 # Hand Parameter
 #===============================================================================
 # Range of Sensor Data
-RANGE_TIME      = range(0,1)
-RANGE_MOTOR     = range(1,8)    # 9:示指DIPのデータは示指PIPと同じ関節角であり、ログ値は常に0なので使わない
-RANGE_SIXAXIS   = range(9,21)
-RANGE_PSV       = range(21,23)
-RANGE_TACTILE   = range(23,95)
+RANGE_TIME       = range(0,1)
+RANGE_MOTOR      = range(1,8)    # 9:示指DIPのデータは示指PIPと同じ関節角であり、ログ値は常に0なので使わない
+RANGE_SIXAXIS    = range(9,21)
+RANGE_PSV        = range(21,23)
+RANGE_TACTILE    = range(23,95)
+RANGE_SIZE       = range(95,96)
 
 # Limit of Sensor Data
 # モータ角LIMIT
@@ -48,6 +48,8 @@ LIMIT_SIXAXIS = numpy.tile([-15000, 15000], (len(RANGE_SIXAXIS),1))     # -15000
 LIMIT_PSV = numpy.array([[-500, 4000], [-500, 6000]])    # -500~4000, -500~11000
 # タクタイルLIMIT
 LIMIT_TACTILE = numpy.tile([0, 200], (len(RANGE_TACTILE),1))    # -50~32670
+# 物体サイズLIMIT
+LIMIT_SIZE = numpy.array([[0,100]])
 
 # Threshold
 DROP_PSV = 300      # PSVがこの値を下回ったら対象物落下とみなす閾値
@@ -55,7 +57,7 @@ DROP_FORCE = 400    # 6軸合力がこの値を下回ったら対象物落下と
 
 # Hand Link Parameter for Calculating Forward Kinematics
 L_HT = numpy.array([21.4, 0.05, 14.0, 39.6, 39.5, 29.7])     # Thumb link length
-L_HI = numpy.array([35.0, 70,7, 50.0, 32.0, 27.0])           # Index finger link length
+L_HI = numpy.array([35.0, 70.7, 50.0, 32.0, 27.0])           # Index finger link length
 #------------------------------------------------------------------------------ 
 
 #===============================================================================
@@ -67,12 +69,14 @@ class CHandlingData(object):
         self.LIMIT = {"MOTOR":LIMIT_MOTOR,\
                       "SIXAXIS":LIMIT_SIXAXIS,\
                       "PSV":LIMIT_PSV,\
-                      "TACTILE":LIMIT_TACTILE}
+                      "TACTILE":LIMIT_TACTILE,\
+                      "SIZE":LIMIT_SIZE}
         self.RANGE = {"TIME":RANGE_TIME,\
                       "MOTOR":RANGE_MOTOR,\
                       "SIXAXIS":RANGE_SIXAXIS,\
                       "PSV":RANGE_PSV,\
-                      "TACTILE":RANGE_TACTILE}
+                      "TACTILE":RANGE_TACTILE,\
+                      "SIZE":RANGE_SIZE}
 
 #===============================================================================
 # Methods 
@@ -132,7 +136,7 @@ def LoadFile(loadFilePath):
     return numpy.array(handlingData)
 
 def CheckLimit(handlingData):
-    for i in xrange(4):
+    for i in xrange(5):
         # MOTOR
         if   i == 0:
             RANGE = RANGE_MOTOR
@@ -149,6 +153,10 @@ def CheckLimit(handlingData):
         elif i == 3:
             RANGE = RANGE_TACTILE
             LIMIT = LIMIT_TACTILE
+        # OBJECT SIZE
+        elif i == 4:
+            RANGE = RANGE_SIZE
+            LIMIT = LIMIT_SIZE
 
         # Round Data
         for j in xrange(len(RANGE)):
@@ -157,7 +165,7 @@ def CheckLimit(handlingData):
             handlingData[handlingData[:,:,idx] > LIMIT[j, 1], idx] = LIMIT[j, 1]
 
 def ScalingHandlingData(handlingData):
-    for i in xrange(4):
+    for i in xrange(5):
         # MOTOR
         if   i == 0:
             RANGE = RANGE_MOTOR
@@ -174,6 +182,10 @@ def ScalingHandlingData(handlingData):
         elif i == 3:
             RANGE = RANGE_TACTILE
             LIMIT = LIMIT_TACTILE
+        # OBJECT SIZE
+        elif i == 4:
+            RANGE = RANGE_SIZE
+            LIMIT = LIMIT_SIZE
 
         # Scaling Data
         handlingData[:,:,RANGE] = (handlingData[:,:,RANGE] - (LIMIT[:,1] + LIMIT[:,0]) / 2.) / ((LIMIT[:,1] - LIMIT[:,0]) / 2.)
@@ -233,7 +245,7 @@ def JudgeFallingTimeForFailureData(handlingData, isPlot=False):
 
     return FallingTime
 
-def CalculateForwardKinematics(handlingData):
+def CalculateObjectSizeBySolvingForwardKinematics(handlingData):
     motor = handlingData[:,:,RANGE_MOTOR] / 100 * (numpy.pi / 180)  # モータ角[rad]
     psv = handlingData[:,:,RANGE_PSV] / 100 * (numpy.pi / 180)      # バネ伸展角[rad]
 
@@ -272,10 +284,10 @@ def CalculateForwardKinematics(handlingData):
     # 行方向：Thumb_L0~L5,IndexL_0~L_5に対する同次変換行列を4*4から16次元の列ベクトルに整形したもの
     # 列方向：時間方向
     # -------------------------------------以下の行列を転置して，16次元の列ベクトルに整形
-    # cosθi        ,    -sinθi            ,    0        ,    ai
-    # cosαi*sinθi    ,    cosαi*cosθi    ,    -sinαi    ,    -sinαi*di
+    # cosθi           ,    -sinθi          ,    0         ,    ai
+    # cosαi*sinθi    ,    cosαi*cosθi    ,    -sinαi   ,    -sinαi*di
     # sinαi*sinθi    ,    sinαi*cosθi    ,    cosαi    ,    cosαi*di
-    # 0                ,    0                ,    0        ,    1 
+    # 0                ,    0                ,    0         ,    1 
     class CHTMatrix():
         def __init__(self):
             self.Thumb = numpy.zeros([N,6,16,T])
@@ -381,17 +393,15 @@ def CalculateForwardKinematics(handlingData):
     fingertipDistance = numpy.sqrt((fingertipCenterPos["Thumb"][:,0] - fingertipCenterPos["Index"][:,0]) ** 2 +
                                    (fingertipCenterPos["Thumb"][:,1] - fingertipCenterPos["Index"][:,1]) ** 2 +
                                    (fingertipCenterPos["Thumb"][:,2] - fingertipCenterPos["Index"][:,2]) ** 2)
-    
 
-    print fingertipDistance
-    
-    for i in xrange(N):
-        plt.plot(fingertipDistance[i])
-    plt.show()
+    # 時刻0の指先中心間距離を把持物体のサイズとして認識する
+    objectSize = fingertipDistance[:,0]
 
-    return fingertipDistance
+    # 学習用に整形
+    objectSize = numpy.tile(objectSize[:,numpy.newaxis], T)
+    objectSize = objectSize[:,:,numpy.newaxis]
     
-    
+    return objectSize
 
 
 def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
@@ -404,14 +414,16 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
         handlingData = LoadFile(loadDir)
         
         print('------------------------------')
+        print('| Calculate Object Size...   |')
+        print('------------------------------')
+        objectSize = CalculateObjectSizeBySolvingForwardKinematics(handlingData)
+        # 物体サイズを行列に付加
+        handlingData = numpy.c_[handlingData, objectSize]
+        
+        print('------------------------------')
         print('| Check Limit...             |')
         print('------------------------------')
         CheckLimit(handlingData)
-        
-        print('------------------------------')
-        print('| Calculate Object Size...   |')
-        print('------------------------------')
-        objectSize = CalculateForwardKinematics(handlingData)
 
         print('------------------------------')
         print('| Scaling Data...            |')
@@ -515,6 +527,7 @@ def SaveScalledHandlingData(loadDirs, failureTrial=False):
 if __name__ == '__main__':
     # 操り試技データの読み込み
     handlingData = LoadHandlingData(LEARNING_FILE_DIR)
+
 #    sparse = ShorteningTimeStep(handlingData)
 #    plt.subplot(2,1,1)
 #    plt.plot(handlingData.data[0][0,:,1:])
