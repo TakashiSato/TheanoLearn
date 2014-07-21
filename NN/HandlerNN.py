@@ -9,23 +9,24 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import *
 
 import sys
+from pylearn2.scripts.tutorials.dbm_demo.train_dbm import train
 sys.path.append('../Utils')
 from DataIO import LoadHandlingData, PrepLearningData, ReshapeForNN, ShorteningTimeStep
 from NN import MetaNN
 
 logger = logging.getLogger(__name__)
-plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
 
 #===============================================================================
 # Methods
 #===============================================================================
 def PlotOutput(model, x_t, dataRange, save=False):
     dataRange = np.array(dataRange) - 1
-    sequences = x_t.shape[0]
+    sequences = 4#x_t.shape[0]
     step = x_t.shape[1]
-    col = 5.0
+    col = 2.0
     row = int(math.ceil(sequences / col))
-
+    
     fig = plt.figure()
 
     for seq in xrange(sequences):
@@ -49,13 +50,12 @@ def PlotOutput(model, x_t, dataRange, save=False):
         date_str = date_obj.strftime('%Y-%m-%d-%H:%M:%S')
         plt.savefig(date_str+'.png', transparent=False)
     else:
+        plt.legend(['T CM1','T CM2', 'T MP', 'T IP', 'I MP1', 'I MP2', 'I PIP'])
         plt.show()
         
-def Learning(x_t, x_tp1):
+def Learning(x_t, x_tp1, NAME=''):
     batch_size = x_t.shape[1]
     x_t, x_tp1 = ReshapeForNN(x_t, x_tp1)
-    
-    NAME='NN_DALL_MSPT_Short'
     
     # ネットワークと訓練モデルの構築
     model = MetaNN(n_in=x_t.shape[1], hidden_layers_sizes=[100], n_out=x_tp1.shape[1],
@@ -72,12 +72,14 @@ def Learning(x_t, x_tp1):
     # 学習したネットワークパラメータを保存
     model.save(fpath='./models/'+NAME,fname=NAME,save_errorlog=True)
 
-def Testing(x_t):
+def Testing(x_t, NAME=''):
     # ネットワークの構築
     model = MetaNN()
+    
+    loadDir = './models/' + NAME + '/' + NAME + '.pkl'
 
     # 学習済みのネットワークパラメータを読み込む
-    model.load('./models/NN_DALL_MSPT_Short/NN_DALL_MSPT_Short.pkl')
+    model.load(loadDir)
 
     # Plot
     PlotOutput(model, x_t, HandlingData.RANGE['MOTOR'])
@@ -92,18 +94,25 @@ def Testing(x_t):
 #===============================================================================
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-
+    
     # 操り試技データの読み込み
-    HandlingData= LoadHandlingData()
+#    HandlingData= LoadHandlingData()
+    HandlingData= LoadHandlingData(['../../AnalysisData/D60/Success'])
     
     # 読み込んだ操り試技データを学習用に整形
     HandlingData = ShorteningTimeStep(HandlingData)
-    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
-#    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV'])
-#    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR'])
+    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
+#    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
+#    x_t, x_tp1 = PrepLearningData(HandlingData,
+#                                  trainType  =['MOTOR','SIXAXIS','PSV','TACTILE'],
+#                                  teacherType=['MOTOR','SIXAXIS','PSV','TACTILE'])
+
+    NAME='NN_DALL_MSPTS_Short'
+#    NAME='NN_D204060_MSPTS_Short'
+#    NAME='NN_D204060_MSPT_MSPT_Short'
 
     # 学習
-#    Learning(x_t, x_tp1)
+#    Learning(x_t, x_tp1, NAME)
     
     # テスト
-#    Testing(x_t)
+    Testing(x_t, NAME)

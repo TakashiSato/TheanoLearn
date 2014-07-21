@@ -14,11 +14,11 @@ plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=
 #===============================================================================
 # Learning File Directories
 #===============================================================================
-LEARNING_FILE_DIR = ['../../AnalysisData/debug']
+#LEARNING_FILE_DIR = ['../../AnalysisData/debug']
 #LEARNING_FILE_DIR = ['../../AnalysisData/D30/Success']
-#LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
-#                     '../../AnalysisData/D40/Success',\
-#                     '../../AnalysisData/D60/Success']
+LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
+                     '../../AnalysisData/D40/Success',\
+                     '../../AnalysisData/D60/Success']
 #LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
 #                     '../../AnalysisData/D30/Success',\
 #                     '../../AnalysisData/D40/Success',\
@@ -49,7 +49,7 @@ LIMIT_PSV = numpy.array([[-500, 4000], [-500, 6000]])    # -500~4000, -500~11000
 # タクタイルLIMIT
 LIMIT_TACTILE = numpy.tile([0, 200], (len(RANGE_TACTILE),1))    # -50~32670
 # 物体サイズLIMIT
-LIMIT_SIZE = numpy.array([[0,100]])
+LIMIT_SIZE = numpy.array([[15,80]])
 
 # Threshold
 DROP_PSV = 300      # PSVがこの値を下回ったら対象物落下とみなす閾値
@@ -435,9 +435,10 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
     print('------------------------------')
     print('| Complete...                |')
     print('------------------------------')
+
     return CHandlingData(HD)
 
-def PrepLearningData(HandlingData, useSensor=['MOTOR', 'SIXAXIS', 'PSV']):
+def PrepLearningData(HandlingData, trainType=['MOTOR', 'SIXAXIS', 'PSV'], teacherType=['MOTOR']):
     # Formating Data for Learning
     train = []
     teacher = []
@@ -451,12 +452,15 @@ def PrepLearningData(HandlingData, useSensor=['MOTOR', 'SIXAXIS', 'PSV']):
     teacher = numpy.array(teacher, dtype=theano.config.floatX)
     
     # Delete Unnecessary Label Data
-    lb = []
-    for sensor in useSensor:
-        lb += HandlingData.RANGE[sensor]
+    lb_train = []
+    lb_teacher = []
+    for type in trainType:
+        lb_train += HandlingData.RANGE[type]
+    for type in teacherType:
+        lb_teacher += HandlingData.RANGE[type]
     
-    train = train[:, :, lb]       # delete 'Time', 'Tactile' row
-    teacher = teacher[:, :, lb]     # delete 'Time', 'Tactile' row
+    train = train[:, :, lb_train]
+    teacher = teacher[:, :, lb_teacher]
     
     return train, teacher
 
@@ -527,6 +531,9 @@ def SaveScalledHandlingData(loadDirs, failureTrial=False):
 if __name__ == '__main__':
     # 操り試技データの読み込み
     handlingData = LoadHandlingData(LEARNING_FILE_DIR)
+#    for i in xrange(5):
+#        print numpy.min(handlingData.data[i][:,:,95])
+#        print numpy.max(handlingData.data[i][:,:,95])
 
 #    sparse = ShorteningTimeStep(handlingData)
 #    plt.subplot(2,1,1)
