@@ -53,6 +53,7 @@ def PlotOutput(model, x_t, dataRange, save=False):
 
 def Learning(x_t, x_tp1):
     batch_size = 1000
+    x_t, x_tp1 = ReshapeForNN(x_t, x_tp1)
 
 #    hidden_layers_sizes = [50,30,10]
 #    hidden_layers_sizes = [8,4]
@@ -86,7 +87,7 @@ def Learning(x_t, x_tp1):
     # 学習したネットワークパラメータを保存
     model.save(fpath='./models/'+NAME, fname=NAME,save_errorlog=True)
 
-def Testing(x_t):
+def Testing(x_t, x_tp1):
     x_t, x_tp1 = ReshapeForNN(x_t, x_tp1)
 
     # ネットワークの構築

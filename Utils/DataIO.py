@@ -9,21 +9,23 @@ import math
 import matplotlib.pyplot as plt
 #from Kinematics import CalculateForwardKinematics
 from matplotlib.ticker import *
+from theano.tensor.tests.test_extra_ops import numpy_16
+from scipy.stats.vonmises_cython import numpy
 plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
 
 #===============================================================================
 # Learning File Directories
 #===============================================================================
-#LEARNING_FILE_DIR = ['../../AnalysisData/debug']
-#LEARNING_FILE_DIR = ['../../AnalysisData/D30/Success']
-LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
-                     '../../AnalysisData/D40/Success',\
-                     '../../AnalysisData/D60/Success']
-#LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
-#                     '../../AnalysisData/D30/Success',\
-#                     '../../AnalysisData/D40/Success',\
-#                     '../../AnalysisData/D50/Success',\
-#                     '../../AnalysisData/D60/Success']
+LEARNING_FILE_DIR = ['../../AnalysisData/debug']
+# LEARNING_FILE_DIR = ['../../AnalysisData/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
+#                      '../../AnalysisData/D40/Success',\
+#                      '../../AnalysisData/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
+#                      '../../AnalysisData/D30/Success',\
+#                      '../../AnalysisData/D40/Success',\
+#                      '../../AnalysisData/D50/Success',\
+#                      '../../AnalysisData/D60/Success']
 
 #===============================================================================
 # Hand Parameter
@@ -245,39 +247,145 @@ def JudgeFallingTimeForFailureData(handlingData, isPlot=False):
 
     return FallingTime
 
-def CalculateObjectSizeBySolvingForwardKinematics(handlingData):
+# タクタイル圧力値から接触セルの位置(13分割)を推定する
+def EstimateContactCellPosition(handlingData):
+    CONTACT_THRESHOLD_THUMB = 20
+    CONTACT_THRESHOLD_INDEX = 18 
+    
+    tactile = handlingData[:,0,RANGE_TACTILE]   # 時刻0のものだけ抜きだし
+    N = tactile.shape[0]                        # データセット数
+    Tactile = {"Thumb": tactile[:,0:36], "Index": tactile[:,37:72]}
+    
+    # セル配置テーブル:拇指
+    #  X:指短手方向で、1-31番セルの列を座標0、12-19番セルの列を座標6と定義
+    #  Y:指長手方向で、1-5番セルの列を座標0、35-36番セルの列を座標6と定義
+    X = {"Thumb": numpy.zeros(36), "Index": numpy.zeros(36)}
+    Y = {"Thumb": numpy.zeros(36), "Index": numpy.zeros(36)}
+    for cell in range(1,37):
+        x = cell - 1 - (cell > 5)*5 - (cell > 12)*7 - (cell > 19)*7 - (cell > 25)*6 - (cell > 30)*5 - (cell > 34)*3;
+        y = (cell > 5)*1 + (cell > 12)*1 + (cell > 19)*1 + (cell > 25)*1 + (cell > 30)*1 + (cell > 34)*1;
+        X["Thumb"][cell-1] = x
+        Y["Thumb"][cell-1] = y
+    # セル配置テーブル:示指
+    #  X:指短手方向で、71-101番セルの列を座標0、82-89番セルの列を座標6と定義
+    #  Y:指長手方向で、71-75番セルの列を座標0、105-106番セルの列を座標6と定義
+    for cell in range(71,107):
+        x = (cell - 71 - (cell > 75)*5 - (cell > 82)*7 - (cell > 89)*7 - (cell > 95)*6 - (cell > 100)*5 - (cell > 104)*3);
+        y = (cell > 75)*1 + (cell > 82)*1 + (cell > 89)*1 + (cell > 95)*1 + (cell > 100)*1 + (cell > 104)*1;
+        X["Index"][cell - 71] = x
+        Y["Index"][cell - 71] = y
+        
+    # 圧力値を閾値と比較して接触セルを判定する
+    contactCell = {"Thumb": Tactile["Thumb"] > CONTACT_THRESHOLD_THUMB,
+                   "Index": Tactile["Index"] > CONTACT_THRESHOLD_INDEX}
+    # 一つも接触セルがないと判定されてしまった場合、
+    # 最も圧力値が大きいセルを接触セルとする
+    for i in xrange(N):
+        # 拇指
+        if any(contactCell["Thumb"][i]) == False:
+            temp_threshold = CONTACT_THRESHOLD_THUMB
+            # 閾値を1ずつ下げていき、接触セルが見つかるか閾値が0になるまでループ
+            while(any(contactCell["Thumb"][i]) == False and temp_threshold > 0):
+                contactCell["Thumb"][i] = Tactile["Thumb"][i] > temp_threshold
+                temp_threshold = temp_threshold - 1
+            if temp_threshold == 0:
+                print "!!!Error: Thumb[" + i + "]: Not found contact cell!!!"
+                raw_input()
+        # 示指
+        if any(contactCell["Index"][i]) == False:
+            temp_threshold = CONTACT_THRESHOLD_THUMB
+            # 閾値を1ずつ下げていき、接触セルが見つかるか閾値が0になるまでループ
+            while(any(contactCell["Index"][i]) == False and temp_threshold > 0):
+                contactCell["Index"][i] = Tactile["Index"][i] > temp_threshold
+                temp_threshold = temp_threshold - 1
+            if temp_threshold == 0:
+                print "!!!Error: Index[" + i + "]: Not found contact cell!!!"
+                raw_input()
+
+    
+    # 接触中心の座標を計算: 接触とみなされたセルをX,Y独立に見たときの位置の平均値を接触中心として推定する
+    contactCenterPos = {"Thumb": {"X": numpy.zeros(N), "Y": numpy.zeros(N)},
+                        "Index": {"X": numpy.zeros(N), "Y": numpy.zeros(N)}}    # 計算結果格納用
+    for i in xrange(N):
+        contactCellPosUnique = {"Thumb": 
+                                    {"X": numpy.unique(X["Thumb"][contactCell["Thumb"][i]]),
+                                     "Y": numpy.unique(Y["Thumb"][contactCell["Thumb"][i]])},
+                                "Index": 
+                                    {"X": numpy.unique(X["Index"][contactCell["Index"][i]]),
+                                     "Y": numpy.unique(Y["Index"][contactCell["Index"][i]])}}
+        contactCenterPos["Thumb"]["X"][i] = numpy.mean(contactCellPosUnique["Thumb"]["X"])
+        contactCenterPos["Thumb"]["Y"][i] = numpy.mean(contactCellPosUnique["Thumb"]["Y"])
+        contactCenterPos["Index"]["X"][i] = numpy.mean(contactCellPosUnique["Index"]["X"])
+        contactCenterPos["Index"]["Y"][i] = numpy.mean(contactCellPosUnique["Index"]["Y"])
+    # 小数点を消すために、すべての結果を2倍する(それでも少数が出る場合があるので四捨五入する)
+    # この計算により、X方向、Y方向ともに0,1,...,12で座標値が表される(つまり分解能は13)
+    contactCenterPos["Thumb"]["X"] = numpy.round(contactCenterPos["Thumb"]["X"] * 2)
+    contactCenterPos["Thumb"]["Y"] = numpy.round(contactCenterPos["Thumb"]["Y"] * 2)
+    contactCenterPos["Index"]["X"] = numpy.round(contactCenterPos["Index"]["X"] * 2)
+    contactCenterPos["Index"]["Y"] = numpy.round(contactCenterPos["Index"]["Y"] * 2)
+    
+    return contactCenterPos
+    
+def GetFingertipShapeTable():
+    ## 指先形状テーブルの作成(※かなりアバウトな値)
+    # 実測代表点: ProE 指先柔軟肉CADにおけるy座標.指短手方向の中心を通る軸がy軸.
+    # y_sample[0],[1],...,[12]がそれぞれおEstimateContactCellPosition()で推定した各指Y座標値の0,1,...,12に対応する
+    y_sample = numpy.array([19.9, 19.7, 19.4, 18.8, 18.0, 16.8, 15.3, 13.8, 12.0, 10.1, 8.0, 5.7, 3.0])
+    z_sample = numpy.array(-(-32 * (1 - (1./20 * y_sample) ** 2) ** (1./3) + 3))
+    
+    # CAD座標からハンド座標(正確には、z原点:爪固定ネジ位置、y原点:指中心軸上)へ変換(実測に基づく...のでかなりアバウト)
+    y_hand = y_sample - 7
+    z_hand = z_sample - 19
+    
+    # 同次変換行列計算用パラメータの算出(ハンド座標原点から見たリンク長と回転角度)
+    LinkLength = numpy.sqrt(z_hand ** 2 + y_hand ** 2)
+    Theta = numpy.arctan2(y_hand, z_hand)
+    
+    return {"Y": y_hand, "Z": z_hand, "LinkLength": LinkLength, "Theta": Theta}
+
+# 関節角度、タクタイルから推定した指先接触中心位置、指先形状テーブルから、時刻0時点でのハンド座標における指先接触位置を計算する
+def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
     motor = handlingData[:,:,RANGE_MOTOR] / 100 * (numpy.pi / 180)  # モータ角[rad]
     psv = handlingData[:,:,RANGE_PSV] / 100 * (numpy.pi / 180)      # バネ伸展角[rad]
 
     linkParamT = []
     linkParamI = []
     N = handlingData.shape[0]
-    T = handlingData.shape[1]
-
+    T = 1 #handlingData.shape[1]    # どうせ時刻0の情報しか使わないので時間の長さは1としている
+    
     # リンクパラメータ行列
     # 時刻tにおける4次元の行ベクトルを転置して4次元列ベクトルにし，それを関節毎に行方向にならべ，
     # その列ベクトルを時間毎に列方向に並べたものがLinkParam行列(4*6(関節数)*2(拇指，示指) = 48(*T)次元)
     # ai-1, αi-1, di, Θi
     for i in xrange(N):
+        tipLLt = fingertipShapeTable["LinkLength"][contactCenterPos["Thumb"]["Y"][i]]
+        tipTht = fingertipShapeTable["Theta"][contactCenterPos["Thumb"]["Y"][i]]
         lpt = numpy.array([
-                 [numpy.tile(L_HT[0],T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T),  numpy.tile(.5*numpy.pi,T)],
-                 [numpy.tile(L_HT[1],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,:,0] +    numpy.pi],
-                 [numpy.tile(L_HT[2],T), numpy.tile(-.5*numpy.pi,T), numpy.tile(L_HT[3],T), motor[i,:,1] +    numpy.pi],
-                 [numpy.tile(     .0,T), numpy.tile(-.5*numpy.pi,T), numpy.tile(     .0,T), motor[i,:,2] - .5*numpy.pi],
-                 [numpy.tile(L_HT[4],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,:,3]              ],
-                 [numpy.tile(L_HT[5],T), numpy.tile(          .0,T), numpy.tile(     .0,T),  numpy.tile(         .0,T)],
+                 [numpy.tile(L_HT[0],T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T),    numpy.tile(.5*numpy.pi,T)],
+                 [numpy.tile(L_HT[1],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,0:T,0] +    numpy.pi],
+                 [numpy.tile(L_HT[2],T), numpy.tile(-.5*numpy.pi,T), numpy.tile(L_HT[3],T), motor[i,0:T,1] +    numpy.pi],
+                 [numpy.tile(     .0,T), numpy.tile(-.5*numpy.pi,T), numpy.tile(     .0,T), motor[i,0:T,2] - .5*numpy.pi],
+                 [numpy.tile(L_HT[4],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,0:T,3]              ],
+                 [numpy.tile(L_HT[5],T), numpy.tile(          .0,T), numpy.tile(     .0,T),    numpy.tile(         .0,T)],
+                 [numpy.tile( tipLLt,T), numpy.tile(          .0,T), numpy.tile(     .0,T),    numpy.tile(     tipTht,T)],
              ])
+
+        tipLLi = fingertipShapeTable["LinkLength"][contactCenterPos["Index"]["Y"][i]]
+        tipThi = fingertipShapeTable["Theta"][contactCenterPos["Index"]["Y"][i]]
         lpi = numpy.array([
-                 [numpy.tile(L_HI[0],T), numpy.tile( .5*numpy.pi,T), numpy.tile(L_HI[1],T),              numpy.tile(-.5*numpy.pi,T)],
-                 [numpy.tile(     .0,T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T), motor[i,:,4] - psv[i,:,0] + .5*numpy.pi],
-                 [numpy.tile(     .0,T), numpy.tile(-.5*numpy.pi,T), numpy.tile(     .0,T), motor[i,:,5]                           ],
-                 [numpy.tile(L_HI[2],T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T), motor[i,:,6]                           ],
-                 [numpy.tile(L_HI[3],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,:,6] - psv[i,:,1]              ],
-                 [numpy.tile(L_HI[4],T), numpy.tile(          .0,T), numpy.tile(     .0,T),              numpy.tile(          .0,T)],
+                 [numpy.tile(L_HI[0],T), numpy.tile( .5*numpy.pi,T), numpy.tile(L_HI[1],T),                  numpy.tile(-.5*numpy.pi,T)],
+                 [numpy.tile(     .0,T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T), motor[i,0:T,4] - psv[i,0:T,0] + .5*numpy.pi],
+                 [numpy.tile(     .0,T), numpy.tile(-.5*numpy.pi,T), numpy.tile(     .0,T), motor[i,0:T,5]                             ],
+                 [numpy.tile(L_HI[2],T), numpy.tile( .5*numpy.pi,T), numpy.tile(     .0,T), motor[i,0:T,6]                             ],
+                 [numpy.tile(L_HI[3],T), numpy.tile(          .0,T), numpy.tile(     .0,T), motor[i,0:T,6] - psv[i,0:T,1]              ],
+                 [numpy.tile(L_HI[4],T), numpy.tile(          .0,T), numpy.tile(     .0,T),                  numpy.tile(          .0,T)],
+                 [numpy.tile( tipLLi,T), numpy.tile(          .0,T), numpy.tile(     .0,T),                   numpy.tile(     tipThi,T)],
              ])
         linkParamT.append(lpt)
         linkParamI.append(lpi)
     LinkParam = {"Thumb": numpy.array(linkParamT), "Index": numpy.array(linkParamI)}
+    
+    LN = LinkParam["Thumb"].shape[1]
     
     # 同次変換行列(転置表現)
     # Thumb[i] or Index[i]の添字i:各リンク(L0~L5)に対応
@@ -290,12 +398,12 @@ def CalculateObjectSizeBySolvingForwardKinematics(handlingData):
     # 0                ,    0                ,    0         ,    1 
     class CHTMatrix():
         def __init__(self):
-            self.Thumb = numpy.zeros([N,6,16,T])
-            self.Index = numpy.zeros([N,6,16,T])
+            self.Thumb = numpy.zeros([N,LN,16,T])
+            self.Index = numpy.zeros([N,LN,16,T])
     HTMatrix = CHTMatrix()
         
     for i in xrange(N):
-        for j in xrange(6):
+        for j in xrange(LN):
             HTMatrix.Thumb[i,j] = numpy.array([
                  numpy.cos(LinkParam["Thumb"][i,j,3]),
                  numpy.cos(LinkParam["Thumb"][i,j,1]) * numpy.sin(LinkParam["Thumb"][i,j,3]),
@@ -347,7 +455,7 @@ def CalculateObjectSizeBySolvingForwardKinematics(handlingData):
 #    print CalcHTM.Thumb[0,0].shape
 #    print HTMatrix.Thumb[0,0].shape
     for i in xrange(N):
-        for j in xrange(6-1):
+        for j in xrange(LN-1):
             CalcHTM.Thumb[i,j+1] = numpy.array([
                numpy.sum(CalcHTM.Thumb[i,j,0:4  ] * HTMatrix.Thumb[i,j+1,0:4  ], axis=0),
                numpy.sum(CalcHTM.Thumb[i,j,0:4  ] * HTMatrix.Thumb[i,j+1,4:8  ], axis=0),
@@ -385,20 +493,37 @@ def CalculateObjectSizeBySolvingForwardKinematics(handlingData):
                numpy.sum(CalcHTM.Index[i,j,12:16] * HTMatrix.Index[i,j+1,12:16], axis=0),
             ])
             
-    fingertipCenterPos = {
-                            "Thumb": CalcHTM.Thumb[:,5,3:13:4],
-                            "Index": CalcHTM.Index[:,5,3:13:4],
-                         }
-    
-    fingertipDistance = numpy.sqrt((fingertipCenterPos["Thumb"][:,0] - fingertipCenterPos["Index"][:,0]) ** 2 +
-                                   (fingertipCenterPos["Thumb"][:,1] - fingertipCenterPos["Index"][:,1]) ** 2 +
-                                   (fingertipCenterPos["Thumb"][:,2] - fingertipCenterPos["Index"][:,2]) ** 2)
+    # 指先中心(爪固定ネジ原点)を基準とした指先間距離計算(従来)
+#     fingertipCenterPos = {
+#                             "Thumb": CalcHTM.Thumb[:,5,3:13:4],
+#                             "Index": CalcHTM.Index[:,5,3:13:4],
+#                          }
+#     
+#     fingertipDistance = numpy.sqrt((fingertipCenterPos["Thumb"][:,0] - fingertipCenterPos["Index"][:,0]) ** 2 +
+#                                    (fingertipCenterPos["Thumb"][:,1] - fingertipCenterPos["Index"][:,1]) ** 2 +
+#                                    (fingertipCenterPos["Thumb"][:,2] - fingertipCenterPos["Index"][:,2]) ** 2)
+#     objectSize_old = fingertipDistance[:,0]
+#     print "    従来:",objectSize_old
+#     print "平均:", numpy.mean(objectSize_old), "分散:", numpy.var(objectSize_old)
 
-    # 時刻0の指先中心間距離を把持物体のサイズとして認識する
-    objectSize = fingertipDistance[:,0]
+    # 指先形状と接触位置を考慮した指先接触位置間距離計算
+    contactCenterPos = {
+                            "Thumb": CalcHTM.Thumb[:,6,3:13:4],
+                            "Index": CalcHTM.Index[:,6,3:13:4],
+                         }
+     
+    contactPosDistance = numpy.sqrt((contactCenterPos["Thumb"][:,0] - contactCenterPos["Index"][:,0]) ** 2 +
+                                    (contactCenterPos["Thumb"][:,1] - contactCenterPos["Index"][:,1]) ** 2 +
+                                    (contactCenterPos["Thumb"][:,2] - contactCenterPos["Index"][:,2]) ** 2)
+
+    # 時刻0の指先接触位置間距離を把持物体のサイズとして認識する
+    objectSize = contactPosDistance[:,0]
+#     print "近似計算:",objectSize
+#     print "平均:", numpy.mean(objectSize), "分散:", numpy.var(objectSize)
+
 
     # 学習用に整形
-    objectSize = numpy.tile(objectSize[:,numpy.newaxis], T)
+    objectSize = numpy.tile(objectSize[:,numpy.newaxis], handlingData.shape[1])
     objectSize = objectSize[:,:,numpy.newaxis]
     
     return objectSize
@@ -412,11 +537,21 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
     HD = []
     for loadDir in loadDirs:
         handlingData = LoadFile(loadDir)
+
+        # タクタイル圧力情報から接触中心位置を推定
+        contactCenterPos = EstimateContactCellPosition(handlingData);
+#         print contactCenterPos
+        
+        # 指先形状テーブルの取得
+        fingertipShapeTable = GetFingertipShapeTable()
+
+        # 接触中心位置情報を基に指先形状テーブルを参照
+        
         
         print('------------------------------')
         print('| Calculate Object Size...   |')
         print('------------------------------')
-        objectSize = CalculateObjectSizeBySolvingForwardKinematics(handlingData)
+        objectSize = CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable)
         # 物体サイズを行列に付加
         handlingData = numpy.c_[handlingData, objectSize]
         
