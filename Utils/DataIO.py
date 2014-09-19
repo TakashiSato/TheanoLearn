@@ -16,7 +16,8 @@ plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=
 #===============================================================================
 # Learning File Directories
 #===============================================================================
-LEARNING_FILE_DIR = ['../../AnalysisData/debug']
+# LEARNING_FILE_DIR = ['../../AnalysisData/debug']
+LEARNING_FILE_DIR = ['../../AnalysisData/20140919/D60']
 # LEARNING_FILE_DIR = ['../../AnalysisData/D60/Success']
 # LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
 #                      '../../AnalysisData/D40/Success',\
@@ -37,6 +38,8 @@ RANGE_SIXAXIS    = range(9,21)
 RANGE_PSV        = range(21,23)
 RANGE_TACTILE    = range(23,95)
 RANGE_SIZE       = range(95,96)
+# RANGE_CURRENT    = range(95,103)
+# RANGE_SIZE       = range(103,104)
 
 # Limit of Sensor Data
 # モータ角LIMIT
@@ -50,8 +53,10 @@ LIMIT_SIXAXIS = numpy.tile([-15000, 15000], (len(RANGE_SIXAXIS),1))     # -15000
 LIMIT_PSV = numpy.array([[-500, 4000], [-500, 6000]])    # -500~4000, -500~11000
 # タクタイルLIMIT
 LIMIT_TACTILE = numpy.tile([0, 200], (len(RANGE_TACTILE),1))    # -50~32670
+# 電流LIMIT
+# LIMIT_CURRENT = numpy.tile([-1000,10000], (len(RANGE_CURRENT),1))
 # 物体サイズLIMIT
-LIMIT_SIZE = numpy.array([[15,80]])
+LIMIT_SIZE = numpy.array([[10,80]])
 
 # Threshold
 DROP_PSV = 300      # PSVがこの値を下回ったら対象物落下とみなす閾値
@@ -60,6 +65,11 @@ DROP_FORCE = 400    # 6軸合力がこの値を下回ったら対象物落下と
 # Hand Link Parameter for Calculating Forward Kinematics
 L_HT = numpy.array([21.4, 0.05, 14.0, 39.6, 39.5, 29.7])     # Thumb link length
 L_HI = numpy.array([35.0, 70.7, 50.0, 32.0, 27.0])           # Index finger link length
+
+# タクタイル接触判定圧力値
+CONTACT_THRESHOLD_THUMB = 20
+CONTACT_THRESHOLD_INDEX = 18 
+    
 #------------------------------------------------------------------------------ 
 
 #===============================================================================
@@ -133,7 +143,8 @@ def LoadFile(loadFilePath):
     for file in files:
 #        print file
         [label, data] = LoadCSV(loadFilePath + '/' + file)
-        handlingData.append(data)
+        data = numpy.array(data)
+        handlingData.append(data[:, 0:RANGE_TACTILE[-1]+1])     # 電流が追記されたCSVに対応するための措置
         
     return numpy.array(handlingData)
 
@@ -249,9 +260,6 @@ def JudgeFallingTimeForFailureData(handlingData, isPlot=False):
 
 # タクタイル圧力値から接触セルの位置(13分割)を推定する
 def EstimateContactCellPosition(handlingData):
-    CONTACT_THRESHOLD_THUMB = 20
-    CONTACT_THRESHOLD_INDEX = 18 
-    
     tactile = handlingData[:,0,RANGE_TACTILE]   # 時刻0のものだけ抜きだし
     N = tactile.shape[0]                        # データセット数
     Tactile = {"Thumb": tactile[:,0:36], "Index": tactile[:,37:72]}
@@ -520,6 +528,7 @@ def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
     objectSize = contactPosDistance[:,0]
 #     print "近似計算:",objectSize
 #     print "平均:", numpy.mean(objectSize), "分散:", numpy.var(objectSize)
+    print "Object Size: ", objectSize, "[mm]"
 
 
     # 学習用に整形
@@ -670,19 +679,20 @@ if __name__ == '__main__':
 #        print numpy.min(handlingData.data[i][:,:,95])
 #        print numpy.max(handlingData.data[i][:,:,95])
 
+#     print handlingData.data
 #    sparse = ShorteningTimeStep(handlingData)
 #    plt.subplot(2,1,1)
-#    plt.plot(handlingData.data[0][0,:,1:])
+    plt.plot(handlingData.data[0][6,:,1:])
 #    plt.subplot(2,1,2)
 #    plt.plot(sparse.data[0][0,:,1:])
-#    plt.show()
+    plt.show()
 
-#    train, teacher = PrepLearningData(handlingData, ['MOTOR','SIXAXIS','PSV','TACTILE'])
-#    plt.subplot(2,1,1)
-#    plt.plot(handlingData.data[0][0,:,1:])
-#    plt.subplot(2,1,2)
-#    plt.plot(train[0,:,1:])
-#    plt.show()
+#     train, teacher = PrepLearningData(handlingData, ['MOTOR','SIXAXIS','PSV','TACTILE'])
+#     plt.subplot(2,1,1)
+#     plt.plot(handlingData.data[0][0,:,1:])
+#     plt.subplot(2,1,2)
+#     plt.plot(train[0,:,1:])
+#     plt.show()
 
 #    train, teacher = ReshapeForRNN_minibatch(train, teacher)
 #    plt.plot(train[:,1,1:])

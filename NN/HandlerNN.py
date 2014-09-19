@@ -22,7 +22,7 @@ plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=
 #===============================================================================
 def PlotOutput(model, x_t, dataRange, save=False):
     dataRange = np.array(dataRange) - 1
-    sequences = 4#x_t.shape[0]
+    sequences = x_t.shape[0]
     step = x_t.shape[1]
     col = 2.0
     row = int(math.ceil(sequences / col))
@@ -54,7 +54,7 @@ def PlotOutput(model, x_t, dataRange, save=False):
         plt.show()
         
 def Learning(x_t, x_tp1, NAME=''):
-    batch_size = x_t.shape[1]
+    batch_size = 50#x_t.shape[1]
     x_t, x_tp1 = ReshapeForNN(x_t, x_tp1)
     
     # ネットワークと訓練モデルの構築
@@ -96,8 +96,8 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     
     # 操り試技データの読み込み
-#    HandlingData= LoadHandlingData()
-    HandlingData= LoadHandlingData(['../../AnalysisData/D60/Success'])
+    HandlingData= LoadHandlingData()
+#     HandlingData= LoadHandlingData(['../../AnalysisData/D60/Success'])
     
     # 読み込んだ操り試技データを学習用に整形
     HandlingData = ShorteningTimeStep(HandlingData)
@@ -107,12 +107,13 @@ if __name__ == '__main__':
 #                                  trainType  =['MOTOR','SIXAXIS','PSV','TACTILE'],
 #                                  teacherType=['MOTOR','SIXAXIS','PSV','TACTILE'])
 
-    NAME='NN_DALL_MSPTS_Short'
+    NAME='NN_20140919_MSPTS'
+#     NAME='NN_DALL_MSPTS_Short'
 #    NAME='NN_D204060_MSPTS_Short'
 #    NAME='NN_D204060_MSPT_MSPT_Short'
 
     # 学習
-#    Learning(x_t, x_tp1, NAME)
+#     Learning(x_t, x_tp1, NAME)
     
     # テスト
     Testing(x_t, NAME)
