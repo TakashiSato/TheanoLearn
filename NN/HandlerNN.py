@@ -106,9 +106,8 @@ if __name__ == '__main__':
 #    x_t, x_tp1 = PrepLearningData(HandlingData,
 #                                  trainType  =['MOTOR','SIXAXIS','PSV','TACTILE'],
 #                                  teacherType=['MOTOR','SIXAXIS','PSV','TACTILE'])
-
-    NAME='NN_20140919_MSPTS'
-#     NAME='NN_DALL_MSPTS_Short'
+#     NAME='NN_20140919_MSPTS'
+    NAME='NN_DALL_MSPTS_Short'
 #    NAME='NN_D204060_MSPTS_Short'
 #    NAME='NN_D204060_MSPT_MSPT_Short'
 

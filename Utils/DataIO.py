@@ -17,7 +17,7 @@ plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=
 # Learning File Directories
 #===============================================================================
 # LEARNING_FILE_DIR = ['../../AnalysisData/debug']
-LEARNING_FILE_DIR = ['../../AnalysisData/20140919/D60']
+LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success']
 # LEARNING_FILE_DIR = ['../../AnalysisData/D60/Success']
 # LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
 #                      '../../AnalysisData/D40/Success',\
@@ -93,7 +93,7 @@ class CHandlingData(object):
 #===============================================================================
 # Methods 
 #===============================================================================
-def LoadCSV(loadFile):
+def LoadCSV(loadFile, fileCount=0):
     ''' Load External CSV File
     1行目：ラベル，2行目以降：数値 となっているcsvファイルを読み込む
         
@@ -108,7 +108,7 @@ def LoadCSV(loadFile):
         print('File not found.')
         return
 
-    print('Load [%s]...' % dataFile)
+    print('[%d] Load [%s]...' % (fileCount,dataFile))
     csvfile = open(loadFile)
 
     data = []
@@ -140,9 +140,9 @@ def LoadFile(loadFilePath):
     handlingData = []
 
     print('Loading [%s]' % loadFilePath + '/')
-    for file in files:
+    for i,file in enumerate(files):
 #        print file
-        [label, data] = LoadCSV(loadFilePath + '/' + file)
+        [label, data] = LoadCSV(loadFilePath + '/' + file, i)
         data = numpy.array(data)
         handlingData.append(data[:, 0:RANGE_TACTILE[-1]+1])     # 電流が追記されたCSVに対応するための措置
         
@@ -201,9 +201,39 @@ def ScalingHandlingData(handlingData):
             LIMIT = LIMIT_SIZE
 
         # Scaling Data
-        handlingData[:,:,RANGE] = (handlingData[:,:,RANGE] - (LIMIT[:,1] + LIMIT[:,0]) / 2.) / ((LIMIT[:,1] - LIMIT[:,0]) / 2.)
+        handlingData[:,:,RANGE] = (handlingData[:,:,RANGE] - ((LIMIT[:,1] + LIMIT[:,0]) / 2.)) / ((LIMIT[:,1] - LIMIT[:,0]) / 2.)
 
     return handlingData
+
+def ReScalingHandlingData(handlingData):
+    ## -1~+1にスケーリングされたデータを元の単位系に戻す
+    for i in xrange(5):
+        # MOTOR
+        if   i == 0:
+            RANGE = RANGE_MOTOR
+            LIMIT = LIMIT_MOTOR
+        # SIXAXIS
+        elif i == 1:
+            RANGE = RANGE_SIXAXIS
+            LIMIT = LIMIT_SIXAXIS
+        # PSV
+        elif i == 2:
+            RANGE = RANGE_PSV
+            LIMIT = LIMIT_PSV
+        # TACTILE
+        elif i == 3:
+            RANGE = RANGE_TACTILE
+            LIMIT = LIMIT_TACTILE
+        # OBJECT SIZE
+        elif i == 4:
+            RANGE = RANGE_SIZE
+            LIMIT = LIMIT_SIZE
+
+        # ReScaling Data
+        handlingData[:,:,RANGE] = handlingData[:,:,RANGE] * ((LIMIT[:,1] - LIMIT[:,0]) / 2.) + ((LIMIT[:,1] + LIMIT[:,0]) / 2.)
+
+    return handlingData
+    
 
 def JudgeFallingTimeForFailureData(handlingData, isPlot=False):
     sequences = handlingData.shape[0]
@@ -297,7 +327,7 @@ def EstimateContactCellPosition(handlingData):
                 contactCell["Thumb"][i] = Tactile["Thumb"][i] > temp_threshold
                 temp_threshold = temp_threshold - 1
             if temp_threshold == 0:
-                print "!!!Error: Thumb[" + i + "]: Not found contact cell!!!"
+                print "!!!Error: Thumb[", i, "]: Not found contact cell!!!"
                 raw_input()
         # 示指
         if any(contactCell["Index"][i]) == False:
@@ -307,7 +337,7 @@ def EstimateContactCellPosition(handlingData):
                 contactCell["Index"][i] = Tactile["Index"][i] > temp_threshold
                 temp_threshold = temp_threshold - 1
             if temp_threshold == 0:
-                print "!!!Error: Index[" + i + "]: Not found contact cell!!!"
+                print "!!!Error: Index[" ,i , "]: Not found contact cell!!!"
                 raw_input()
 
     
@@ -551,12 +581,10 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
         contactCenterPos = EstimateContactCellPosition(handlingData);
 #         print contactCenterPos
         
-        # 指先形状テーブルの取得
+        # 接触中心位置情報を基に指先形状テーブルを参照
         fingertipShapeTable = GetFingertipShapeTable()
 
-        # 接触中心位置情報を基に指先形状テーブルを参照
-        
-        
+        # 関節角度、接触中心位置情報、指先形状テーブルを利用して物体サイズを計算
         print('------------------------------')
         print('| Calculate Object Size...   |')
         print('------------------------------')
@@ -671,10 +699,43 @@ def SaveScalledHandlingData(loadDirs, failureTrial=False):
     print('| Done...                    |')
     print('------------------------------')
         
+def PlotData(handlingData, dataRange):
+    dataRange = numpy.array(dataRange)
+    sequences = handlingData.shape[0]
+    step = handlingData.shape[1]
+    col = 4.0
+    
+    if sequences > 20:
+        row = 5
+    else:
+        row = int(math.ceil(sequences / col))
         
+    for seq in xrange(sequences):
+        if (seq % 20) == 0:
+            plt.figure()
+            count = 0
+        ax = plt.subplot(row,col,count+1)
+        count = count + 1
+
+        sequence = plt.plot(handlingData[seq,:,dataRange[0]:dataRange[-1]+1])
+        plt.xlim(0,step)
+        plt.ylim(-1,1)
+
+        if (seq % col) != 0:
+            ax.yaxis.set_major_formatter(NullFormatter())
+        if int(math.ceil((seq+1) / col)) != row:
+            ax.xaxis.set_major_formatter(NullFormatter())
+    plt.show()
+
 if __name__ == '__main__':
     # 操り試技データの読み込み
     handlingData = LoadHandlingData(LEARNING_FILE_DIR)
+    
+#     PlotData(handlingData.data[0], handlingData.RANGE["MOTOR"])
+    PlotData(handlingData.data[0], handlingData.RANGE["SIXAXIS"])
+#     PlotData(handlingData.data[0], handlingData.RANGE["PSV"])
+    PlotData(handlingData.data[0], handlingData.RANGE["TACTILE"])
+    
 #    for i in xrange(5):
 #        print numpy.min(handlingData.data[i][:,:,95])
 #        print numpy.max(handlingData.data[i][:,:,95])
@@ -682,10 +743,10 @@ if __name__ == '__main__':
 #     print handlingData.data
 #    sparse = ShorteningTimeStep(handlingData)
 #    plt.subplot(2,1,1)
-    plt.plot(handlingData.data[0][6,:,1:])
+#     plt.plot(handlingData.data[0][0,:,1:])
 #    plt.subplot(2,1,2)
 #    plt.plot(sparse.data[0][0,:,1:])
-    plt.show()
+#     plt.show()
 
 #     train, teacher = PrepLearningData(handlingData, ['MOTOR','SIXAXIS','PSV','TACTILE'])
 #     plt.subplot(2,1,1)

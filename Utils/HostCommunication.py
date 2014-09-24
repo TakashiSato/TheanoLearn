@@ -203,7 +203,7 @@ if __name__ == '__main__':
             break
         time.sleep(0.5)
         com.SetSendParam([c, c, c, c, 0, 0, c])
-        c=c+10
+#        c=c+10
 #         if c > 100:
 #             break
 
