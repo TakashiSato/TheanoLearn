@@ -7,26 +7,29 @@ import theano
 
 import math
 import matplotlib.pyplot as plt
-#from Kinematics import CalculateForwardKinematics
 from matplotlib.ticker import *
-from theano.tensor.tests.test_extra_ops import numpy_16
-from scipy.stats.vonmises_cython import numpy
-plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+# plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+plt.rc('figure.subplot',left=0.05,right=0.982,hspace=0,wspace=0,bottom=0.05,top=0.970)
 
 #===============================================================================
 # Learning File Directories
 #===============================================================================
 # LEARNING_FILE_DIR = ['../../AnalysisData/debug']
-LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success']
-# LEARNING_FILE_DIR = ['../../AnalysisData/D60/Success']
-# LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
-#                      '../../AnalysisData/D40/Success',\
-#                      '../../AnalysisData/D60/Success']
-# LEARNING_FILE_DIR = ['../../AnalysisData/D20/Success',\
-#                      '../../AnalysisData/D30/Success',\
-#                      '../../AnalysisData/D40/Success',\
-#                      '../../AnalysisData/D50/Success',\
-#                      '../../AnalysisData/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/2012/D40/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D40/Success']
+LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
+                     '../../AnalysisData/funabashi/D40/Success',\
+                     '../../AnalysisData/funabashi/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
+#                      '../../AnalysisData/funabashi/D30/Success',\
+#                      '../../AnalysisData/funabashi/D40/Success',\
+#                      '../../AnalysisData/funabashi/D50/Success',\
+#                      '../../AnalysisData/funabashi/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/2012/D20/Success',\
+#                      '../../AnalysisData/2012/D30/Success',\
+#                      '../../AnalysisData/2012/D40/Success',\
+#                      '../../AnalysisData/2012/D50/Success',\
+#                      '../../AnalysisData/2012/D60/Success']
 
 #===============================================================================
 # Hand Parameter
@@ -76,7 +79,7 @@ CONTACT_THRESHOLD_INDEX = 18
 # Class
 #===============================================================================
 class CHandlingData(object):
-    def __init__(self, data):
+    def __init__(self, data, contactCell=[]):
         self.data = data
         self.LIMIT = {"MOTOR":LIMIT_MOTOR,\
                       "SIXAXIS":LIMIT_SIXAXIS,\
@@ -89,6 +92,7 @@ class CHandlingData(object):
                       "PSV":RANGE_PSV,\
                       "TACTILE":RANGE_TACTILE,\
                       "SIZE":RANGE_SIZE}
+        self.contactCell = contactCell
 
 #===============================================================================
 # Methods 
@@ -288,12 +292,7 @@ def JudgeFallingTimeForFailureData(handlingData, isPlot=False):
 
     return FallingTime
 
-# タクタイル圧力値から接触セルの位置(13分割)を推定する
-def EstimateContactCellPosition(handlingData):
-    tactile = handlingData[:,0,RANGE_TACTILE]   # 時刻0のものだけ抜きだし
-    N = tactile.shape[0]                        # データセット数
-    Tactile = {"Thumb": tactile[:,0:36], "Index": tactile[:,37:72]}
-    
+def GetCellPositionTable():
     # セル配置テーブル:拇指
     #  X:指短手方向で、1-31番セルの列を座標0、12-19番セルの列を座標6と定義
     #  Y:指長手方向で、1-5番セルの列を座標0、35-36番セルの列を座標6と定義
@@ -312,6 +311,17 @@ def EstimateContactCellPosition(handlingData):
         y = (cell > 75)*1 + (cell > 82)*1 + (cell > 89)*1 + (cell > 95)*1 + (cell > 100)*1 + (cell > 104)*1;
         X["Index"][cell - 71] = x
         Y["Index"][cell - 71] = y
+        
+    return X, Y
+
+# タクタイル圧力値から接触セルの位置(13分割)を推定する
+def EstimateContactCellPosition(handlingData):
+    tactile = handlingData[:,0,RANGE_TACTILE]   # 時刻0のものだけ抜きだし
+    N = tactile.shape[0]                        # データセット数
+    Tactile = {"Thumb": tactile[:,0:36], "Index": tactile[:,36:72]}
+    
+    # セル配置テーブル:拇指
+    X, Y = GetCellPositionTable()
         
     # 圧力値を閾値と比較して接触セルを判定する
     contactCell = {"Thumb": Tactile["Thumb"] > CONTACT_THRESHOLD_THUMB,
@@ -340,7 +350,6 @@ def EstimateContactCellPosition(handlingData):
                 print "!!!Error: Index[" ,i , "]: Not found contact cell!!!"
                 raw_input()
 
-    
     # 接触中心の座標を計算: 接触とみなされたセルをX,Y独立に見たときの位置の平均値を接触中心として推定する
     contactCenterPos = {"Thumb": {"X": numpy.zeros(N), "Y": numpy.zeros(N)},
                         "Index": {"X": numpy.zeros(N), "Y": numpy.zeros(N)}}    # 計算結果格納用
@@ -362,7 +371,7 @@ def EstimateContactCellPosition(handlingData):
     contactCenterPos["Index"]["X"] = numpy.round(contactCenterPos["Index"]["X"] * 2)
     contactCenterPos["Index"]["Y"] = numpy.round(contactCenterPos["Index"]["Y"] * 2)
     
-    return contactCenterPos
+    return contactCenterPos, contactCell
     
 def GetFingertipShapeTable():
     ## 指先形状テーブルの作成(※かなりアバウトな値)
@@ -382,7 +391,7 @@ def GetFingertipShapeTable():
     return {"Y": y_hand, "Z": z_hand, "LinkLength": LinkLength, "Theta": Theta}
 
 # 関節角度、タクタイルから推定した指先接触中心位置、指先形状テーブルから、時刻0時点でのハンド座標における指先接触位置を計算する
-def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
+def CalculateObjectSize(handlingData, contactCenterPos):
     motor = handlingData[:,:,RANGE_MOTOR] / 100 * (numpy.pi / 180)  # モータ角[rad]
     psv = handlingData[:,:,RANGE_PSV] / 100 * (numpy.pi / 180)      # バネ伸展角[rad]
 
@@ -391,6 +400,9 @@ def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
     N = handlingData.shape[0]
     T = 1 #handlingData.shape[1]    # どうせ時刻0の情報しか使わないので時間の長さは1としている
     
+    # 接触中心位置情報を基に指先形状テーブルを参照
+    fingertipShapeTable = GetFingertipShapeTable()
+
     # リンクパラメータ行列
     # 時刻tにおける4次元の行ベクトルを転置して4次元列ベクトルにし，それを関節毎に行方向にならべ，
     # その列ベクトルを時間毎に列方向に並べたものがLinkParam行列(4*6(関節数)*2(拇指，示指) = 48(*T)次元)
@@ -532,17 +544,18 @@ def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
             ])
             
     # 指先中心(爪固定ネジ原点)を基準とした指先間距離計算(従来)
-#     fingertipCenterPos = {
-#                             "Thumb": CalcHTM.Thumb[:,5,3:13:4],
-#                             "Index": CalcHTM.Index[:,5,3:13:4],
-#                          }
-#     
-#     fingertipDistance = numpy.sqrt((fingertipCenterPos["Thumb"][:,0] - fingertipCenterPos["Index"][:,0]) ** 2 +
-#                                    (fingertipCenterPos["Thumb"][:,1] - fingertipCenterPos["Index"][:,1]) ** 2 +
-#                                    (fingertipCenterPos["Thumb"][:,2] - fingertipCenterPos["Index"][:,2]) ** 2)
-#     objectSize_old = fingertipDistance[:,0]
-#     print "    従来:",objectSize_old
-#     print "平均:", numpy.mean(objectSize_old), "分散:", numpy.var(objectSize_old)
+    fingertipCenterPos = {
+                            "Thumb": CalcHTM.Thumb[:,5,3:13:4],
+                            "Index": CalcHTM.Index[:,5,3:13:4],
+                         }
+    
+    fingertipDistance = numpy.sqrt((fingertipCenterPos["Thumb"][:,0] - fingertipCenterPos["Index"][:,0]) ** 2 +
+                                   (fingertipCenterPos["Thumb"][:,1] - fingertipCenterPos["Index"][:,1]) ** 2 +
+                                   (fingertipCenterPos["Thumb"][:,2] - fingertipCenterPos["Index"][:,2]) ** 2)
+    objectSize_ftd = fingertipDistance[:,0]
+#    print "    従来:",objectSize_ftd
+#     print "平均:", numpy.mean(objectSize_ftd), "分散:", numpy.var(objectSize_ftd)
+#     print "Object Size FTD: ", objectSize_ftd, "[mm]"
 
     # 指先形状と接触位置を考慮した指先接触位置間距離計算
     contactCenterPos = {
@@ -556,16 +569,28 @@ def CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable):
 
     # 時刻0の指先接触位置間距離を把持物体のサイズとして認識する
     objectSize = contactPosDistance[:,0]
-#     print "近似計算:",objectSize
+#    print "近似計算:",objectSize
 #     print "平均:", numpy.mean(objectSize), "分散:", numpy.var(objectSize)
-    print "Object Size: ", objectSize, "[mm]"
+#     print "Object Size: ", objectSize, "[mm]"
 
+    # ヒストグラム描画
+#     plt.subplot(2,1,1)
+#     plt.hist(objectSize_ftd, bins=50, range=(0,80))
+#     plt.text(60, .8, 'Mean' + str(numpy.mean(objectSize_ftd)))
+#     plt.text(60, .5,'Var ' + str(numpy.var(objectSize_ftd)))
+#     plt.subplot(2,1,2)
+#     plt.hist(objectSize, bins=50, range=(0,80))
+#     plt.text(60, .8, 'Mean' + str(numpy.mean(objectSize)))
+#     plt.text(60, .5,'Var ' + str(numpy.var(objectSize)))
+#     plt.show()
 
     # 学習用に整形
+    objectSize_ftd = numpy.tile(objectSize_ftd[:,numpy.newaxis], handlingData.shape[1])
+    objectSize_ftd = objectSize_ftd[:,:,numpy.newaxis]
     objectSize = numpy.tile(objectSize[:,numpy.newaxis], handlingData.shape[1])
     objectSize = objectSize[:,:,numpy.newaxis]
     
-    return objectSize
+    return objectSize, objectSize_ftd
 
 
 def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
@@ -574,23 +599,22 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
     print('------------------------------')
 
     HD = []
+    CP = []
     for loadDir in loadDirs:
         handlingData = LoadFile(loadDir)
 
         # タクタイル圧力情報から接触中心位置を推定
-        contactCenterPos = EstimateContactCellPosition(handlingData);
+        contactCenterPos, contactCell = EstimateContactCellPosition(handlingData);
+        CP.append(contactCell)
 #         print contactCenterPos
-        
-        # 接触中心位置情報を基に指先形状テーブルを参照
-        fingertipShapeTable = GetFingertipShapeTable()
 
         # 関節角度、接触中心位置情報、指先形状テーブルを利用して物体サイズを計算
         print('------------------------------')
         print('| Calculate Object Size...   |')
         print('------------------------------')
-        objectSize = CalculateObjectSize(handlingData, contactCenterPos, fingertipShapeTable)
+        objectSize, objectSize_ftd = CalculateObjectSize(handlingData, contactCenterPos)
         # 物体サイズを行列に付加
-        handlingData = numpy.c_[handlingData, objectSize]
+        handlingData = numpy.c_[handlingData, objectSize_ftd]
         
         print('------------------------------')
         print('| Check Limit...             |')
@@ -608,7 +632,7 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
     print('| Complete...                |')
     print('------------------------------')
 
-    return CHandlingData(HD)
+    return CHandlingData(HD, CP)
 
 def PrepLearningData(HandlingData, trainType=['MOTOR', 'SIXAXIS', 'PSV'], teacherType=['MOTOR']):
     # Formating Data for Learning
@@ -726,15 +750,65 @@ def PlotData(handlingData, dataRange):
         if int(math.ceil((seq+1) / col)) != row:
             ax.xaxis.set_major_formatter(NullFormatter())
     plt.show()
+    
+def ShowContactTactileCell(contactCell):
+    ## 接触位置をセルの位置に対応させて描画
+    N = contactCell["Thumb"].shape[0]
+    X, Y = GetCellPositionTable()
+    
+    MAX = 15
+    col = 5
+    if N < col:
+        col = N
+    if N > MAX:
+        row = 3 * 2
+    else:
+        row = int(math.ceil(N / col)) * 2
+    if row == 0:
+        row = 2
+
+    for i in xrange(N):
+        if (i % MAX) == 0:
+            fig = plt.figure()
+            count = 1
+            
+
+        # 示指
+        ax = fig.add_subplot(row,col,count)
+        for j in xrange(36):
+            if contactCell["Index"][i][j] == True:
+                rect = plt.Rectangle((-X["Index"][j],Y["Index"][j]), width=1,height=1, axes=ax, facecolor="red", edgecolor="red")
+            else:
+                rect = plt.Rectangle((-X["Index"][j],Y["Index"][j]), width=1,height=1, axes=ax, facecolor="None", edgecolor="red")
+            ax.add_patch(rect)
+        ax.set_xlim(-7,2)
+        ax.set_ylim(-1,8)
+        # 拇指
+        ax = fig.add_subplot(row,col,count+col)
+        for j in xrange(36):
+            if contactCell["Thumb"][i][j] == True:
+                rect = plt.Rectangle((X["Thumb"][j],-Y["Thumb"][j]), width=1,height=1, axes=ax, facecolor="red", edgecolor="red")
+            else:
+                rect = plt.Rectangle((X["Thumb"][j],-Y["Thumb"][j]), width=1,height=1, axes=ax, facecolor="None", edgecolor="red")
+            ax.add_patch(rect)
+        ax.set_xlim(-1,8)
+        ax.set_ylim(-7,2)
+
+        count = count + 1
+        if (count % col) == 1:
+            count = count + col
+
+    plt.show()
 
 if __name__ == '__main__':
     # 操り試技データの読み込み
     handlingData = LoadHandlingData(LEARNING_FILE_DIR)
+#     ShowContactTactileCell(handlingData.contactCell[0])
     
 #     PlotData(handlingData.data[0], handlingData.RANGE["MOTOR"])
-    PlotData(handlingData.data[0], handlingData.RANGE["SIXAXIS"])
-#     PlotData(handlingData.data[0], handlingData.RANGE["PSV"])
-    PlotData(handlingData.data[0], handlingData.RANGE["TACTILE"])
+#     PlotData(handlingData.data[0], handlingData.RANGE["SIXAXIS"])
+#    PlotData(handlingData.data[0], handlingData.RANGE["PSV"])
+#     PlotData(handlingData.data[0], handlingData.RANGE["TACTILE"])
     
 #    for i in xrange(5):
 #        print numpy.min(handlingData.data[i][:,:,95])

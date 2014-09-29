@@ -15,7 +15,8 @@ from DataIO import LoadHandlingData, PrepLearningData, ReshapeForNN, ShorteningT
 from NN import MetaNN
 
 logger = logging.getLogger(__name__)
-plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+# plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+plt.rc('figure.subplot',left=0.05,right=0.982,hspace=0,wspace=0,bottom=0.05,top=0.970)
 
 #===============================================================================
 # Methods
@@ -24,13 +25,18 @@ def PlotOutput(model, x_t, dataRange, save=False):
     dataRange = np.array(dataRange) - 1
     sequences = x_t.shape[0]
     step = x_t.shape[1]
-    col = 2.0
-    row = int(math.ceil(sequences / col))
-    
-    fig = plt.figure()
-
+    col = 5.0
+    MAX_PLOT = 25
+    if sequences > MAX_PLOT:
+        row = MAX_PLOT / col
+    else:
+        row = int(math.ceil(sequences / col))
     for seq in xrange(sequences):
-        ax = plt.subplot(row,col,seq+1)
+        if (seq % MAX_PLOT) == 0:
+            plt.figure()
+            count = 1
+
+        ax = plt.subplot(row,col,count)
         xs_t = x_t[seq]
 
         true_sequence = plt.plot(xs_t[:,dataRange])
@@ -45,6 +51,8 @@ def PlotOutput(model, x_t, dataRange, save=False):
         guessed_targets = plt.plot(guess[:,dataRange], linestyle='--')
         for i, x in enumerate(guessed_targets):
             x.set_color(true_sequence[i].get_color())
+        count = count + 1
+
     if save is True:
         date_obj = datetime.datetime.now()
         date_str = date_obj.strftime('%Y-%m-%d-%H:%M:%S')
@@ -54,15 +62,15 @@ def PlotOutput(model, x_t, dataRange, save=False):
         plt.show()
         
 def Learning(x_t, x_tp1, NAME=''):
-    batch_size = 50#x_t.shape[1]
+    batch_size = 100#x_t.shape[1]
     x_t, x_tp1 = ReshapeForNN(x_t, x_tp1)
     
     # ネットワークと訓練モデルの構築
     model = MetaNN(n_in=x_t.shape[1], hidden_layers_sizes=[100], n_out=x_tp1.shape[1],
-                   n_epochs=1000000, batch_size=batch_size, t_error = 1e-6, 
+                   n_epochs=20000, batch_size=batch_size, t_error = 1e-6, 
                    L1_reg=0.00, L2_reg=1e-4, activation='tanh',
-                   learning_rate=0.001, learning_rate_decay=0.999999,
-                   final_momentum=0.9, initial_momentum=0.5, momentum_switchover=100,
+                   learning_rate=0.001, learning_rate_decay=0.9999,
+                   final_momentum=0.9, initial_momentum=0.5, momentum_switchover=500,
                    numpy_rng_seed=int(time.time()),
                    snapshot_every=10000, snapshot_path='./models/tmp/'+NAME)
 
@@ -100,19 +108,25 @@ if __name__ == '__main__':
 #     HandlingData= LoadHandlingData(['../../AnalysisData/D60/Success'])
     
     # 読み込んだ操り試技データを学習用に整形
-    HandlingData = ShorteningTimeStep(HandlingData)
-    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
-#    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
+#     HandlingData = ShorteningTimeStep(HandlingData)
+#     x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
+    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
 #    x_t, x_tp1 = PrepLearningData(HandlingData,
 #                                  trainType  =['MOTOR','SIXAXIS','PSV','TACTILE'],
 #                                  teacherType=['MOTOR','SIXAXIS','PSV','TACTILE'])
 #     NAME='NN_20140919_MSPTS'
-    NAME='NN_DALL_MSPTS_Short'
+#     NAME='NN_DALL_MSPTS_Short'
+#    NAME='NN_DALL_MSPT_Short_batch20_f'
+#    NAME='NN_D204060_MSPT_Short_batch20_f'
+#    NAME='NN_D204060_MSPT_Short_batch100_f'
+#     NAME='NN_DALL_MSPT_Short_batch100_f'
+#     NAME='NN_D204060_MSPTS_Short_batch1f'
+    NAME='NN_D204060_MSPT_batch100f_m500_lr9999'
 #    NAME='NN_D204060_MSPTS_Short'
 #    NAME='NN_D204060_MSPT_MSPT_Short'
 
     # 学習
-#     Learning(x_t, x_tp1, NAME)
+    Learning(x_t, x_tp1, NAME)
     
     # テスト
-    Testing(x_t, NAME)
+#     Testing(x_t, NAME)
