@@ -15,6 +15,9 @@ from HostCommunication import HostCommunication
 
 logger = logging.getLogger(__name__)
 
+#===============================================================================
+# Parameters
+#===============================================================================
 RANGE = {
          "TIME"     : range(0,1),
          "MOTOR"    : range(1,8),
@@ -28,14 +31,13 @@ RANGE = {
 IS_GET_OBJECT_SIZE = False
 
 # Global
-OBJECT_SIZE = np.inf
+OBJECT_SIZE = 40
 CONTROL_TIME = 0
 
-CONTROL_TIME_MAX = 100   # sec
-CONTROL_INTERVAL = 0.05  # sec
+CONTROL_TIME_MAX = 60000   # msec
+CONTROL_INTERVAL = 50      # msec
 
 #===============================================================================
-
 # Methods
 #===============================================================================
 def PrepNetwork(NAME=''):
@@ -63,7 +65,7 @@ def ReshapeRecvDataForNetwork(data, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTI
     handlingData = np.array([np.r_[Time, motor, psv, force, tactile]])
     handlingData = handlingData[np.newaxis, :]
 
-    if IS_GET_OBJECT_SIZE is False:
+    if (IS_GET_OBJECT_SIZE is False) and ('SIZE' in inputType):
     # タクタイル圧力情報から接触中心位置を推定
         contactCenterPos, contactCell = DataIO.EstimateContactCellPosition(handlingData);
          
@@ -130,16 +132,16 @@ def SetInitialPose(com, div=10):
         com.SetSendParam(ref)
         print "[",i,"] Next Motor:", ref
 #         time.sleep(0.5)
-        time.sleep(CONTROL_INTERVAL)
+        time.sleep(CONTROL_INTERVAL/1000.0)
     print "Complete!!!"
     
 def ControlEndCheck():
     global CONTROL_TIME
     
-    CONTROL_TIME = CONTROL_TIME + CONTROL_INTERVAL
-    if (int(CONTROL_TIME) % 2) == 0:
+    if ((CONTROL_TIME) % 1000) == 0:
         print "CONTROL_TIME:", CONTROL_TIME
 
+    CONTROL_TIME = CONTROL_TIME + CONTROL_INTERVAL
     if CONTROL_TIME >= CONTROL_TIME_MAX:
         CONTROL_TIME = 0
         return True
@@ -153,29 +155,14 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     
     global IS_GET_OBJECT_SIZE
+    global CONTROL_TIME
 
     # 学習済みネットワークを呼び出す
-    model = PrepNetwork('NN_D204060_MSPTS_Short_batch100_f')
+    model = PrepNetwork('NN_D204060_MSPT_Short_batch100_f')
     
     # Hostと通信を行うインスタンスを用意
     com = HostCommunication()
     
-#     # For Debug
-#     handlingData = DataIO.LoadFile('../../AnalysisData/debug')
-#     Data = handlingData[2,0,:]
-#     
-#     dummy = {
-#              "Motor":   np.r_[Data[1:9], np.zeros(16)],
-#              "Psv":     np.r_[Data[21:23], np.zeros(6)],
-#              "Force":   np.r_[Data[9:21], np.zeros(12)],
-#              "Tactile": np.r_[Data[23:59], np.zeros(36), Data[59:95], np.zeros(146)],
-#             }
-#     inputData = ReshapeRecvDataForNetwork(dummy, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTILE', 'SIZE'])
-#     outputData = model.predict(inputData)
-#     nextMotor = ReshapeOutputDataForSendToHost(outputData)
-#     com.SetSendParam(nextMotor)
-#     print "REF_MOTOR:", com.REF_TWHAND["Motor"][0:7]
-
     # Hostとの通信を行うスレッドを開始する
     com.start()
      
@@ -201,18 +188,23 @@ if __name__ == '__main__':
         # 制御始めは初期把持姿勢へ移行
         if var == 'i':
             SetInitialPose(com, div=50)
+            CONTROL_TIME = 0
         # RealTimeControl開始
         if var == 's':
-            print "!!! Real Time Control Start !!!"
-            IS_GET_OBJECT_SIZE = False
+            print "!!! Waiting 1 sec for Real Time Control!!!"
             time.sleep(1)
+            print "!!! Real Time Control Start !!!"
+            com.LogEnable()
+            IS_GET_OBJECT_SIZE = False
             rtcFlag = True
         # RealTimeControl一時停止
         if var == 'p':
+            com.LogDisable()
             print "!!! Real Time Control Pause !!!"
             rtcFlag = False
         # プログラム終了
         if var == 'q':
+            com.LogDisable()
             print "!!! Real Time Control Stop !!!"
             rtcFlag = False
             break
@@ -220,7 +212,7 @@ if __name__ == '__main__':
         # Real Time Control部分
         if rtcFlag is True:
             # Hostから受信した現在のハンドパラメータをネットワークへ入力できる形に整形
-            inputData = ReshapeRecvDataForNetwork(com.CUR_TWHAND, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTILE', 'SIZE'])
+            inputData = ReshapeRecvDataForNetwork(com.CUR_TWHAND, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTILE'])#, 'SIZE'])
              
             # 学習済みのネットワークにハンドパラメータの現在値を入力し(t+1)の出力を得る
             outputData = model.predict(inputData)
@@ -235,6 +227,7 @@ if __name__ == '__main__':
 
             # 制御終了処理
             if ControlEndCheck() == True:
+                com.LogDisable()
                 print "!!! Real Time Control Stop !!!"
                 rtcFlag = False
          
@@ -242,7 +235,7 @@ if __name__ == '__main__':
 #         com.PrintRecvData()
         
         # Wait
-        time.sleep(CONTROL_INTERVAL)
+        time.sleep(CONTROL_INTERVAL / 1000.0)
     
     keyMonitoringThread.Stop()
     print "End of Real Time Control"

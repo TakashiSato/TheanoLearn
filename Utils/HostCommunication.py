@@ -33,6 +33,7 @@ RECV_DATA_FORMAT = (
                     ("Psv"           , "8h"  ),
                     ("Force"         , "24h" ),
                     ("Tactile"       , "242h"),
+                    ("FileName"      , "20c" ),
                    )
 RECV_DATA_FORMAT = collections.OrderedDict(RECV_DATA_FORMAT)
 
@@ -40,6 +41,7 @@ RECV_DATA_FORMAT = collections.OrderedDict(RECV_DATA_FORMAT)
 SEND_DATA_FORMAT = (
                     ("e_Command"     , "1i"  ),
                     ("Motor"         , "16h" ),
+                    ("LogEnable"     , "1i"  ),
                    )
 SEND_DATA_FORMAT = collections.OrderedDict(SEND_DATA_FORMAT)
 #############################################################
@@ -180,6 +182,14 @@ class HostCommunication(threading.Thread):
         else:
             print "[SetSendParam]:Invalid Parameter!"
             
+    def LogEnable(self):
+        self.REF_TWHAND["LogEnable"] = [1]
+            
+    def LogDisable(self):
+        self.REF_TWHAND["LogEnable"] = [0]
+        
+    def GetFileName(self):
+        return "".join(map(str, self.CUR_TWHAND["FileName"]))
     
     def PrintRecvData(self):
         ## 受信しているデータの現在値を表示
@@ -188,6 +198,7 @@ class HostCommunication(threading.Thread):
         print "[Psv]  :"     , self.CUR_TWHAND["Psv"][2:4]
         print "[Force]:"     , self.CUR_TWHAND["Force"][0:12]
 #         print "[Tactile]"   , self.CUR_TWHAND["Tactile"]
+        print "[FileName]:"  , self.GetFileName()
 
 
         
@@ -196,18 +207,22 @@ if __name__ == '__main__':
     
     # 通信動作スレッド開始
     com.start()
-    
+#     print com.REF_TWHAND
+     
     c = 0
     while(True):
         if com.CompleteFlag == True:
             break
         time.sleep(0.5)
-        com.SetSendParam([c, c, c, c, 0, 0, c])
+        com.LogEnable()
+        time.sleep(0.5)
+        com.LogDisable()
+#         com.SetSendParam([c, c, c, c, 0, 0, c])
 #        c=c+10
 #         if c > 100:
 #             break
-
-        print com.REF_TWHAND
+ 
+#         print com.REF_TWHAND
         com.PrintRecvData()
     
     print "END"

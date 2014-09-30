@@ -53,16 +53,14 @@ def PlotOutput(model, x_t, dataRange, save=False):
     else:
         plt.show()
 
-def Learning(x_t, x_tp1):
+def Learning(x_t, x_tp1, NAME):
     batch_size = x_t.shape[1]
-    
-    NAME='RNN_minibatch_DALL_MSPT_BPTT-1_Short'
     
     # ネットワークと訓練モデルの構築
     model = MetaRNN(n_in=x_t.shape[2], n_hidden=100, n_out=x_tp1.shape[2],
                     truncated_num=-1,
-                    learning_rate=0.001, learning_rate_decay=0.999999,
-                    n_epochs=1000000, t_error = 1e-6, batch_size=batch_size,
+                    learning_rate=0.001, learning_rate_decay=0.99999,
+                    n_epochs=100000, t_error = 1e-6, batch_size=batch_size,
                     activation='tanh', L2_reg=1e-4,
                     snapshot_every=10000, snapshot_path='./models/tmp/'+NAME)
 
@@ -73,12 +71,14 @@ def Learning(x_t, x_tp1):
     # 学習したネットワークパラメータを保存
     model.save(fpath='./models/'+NAME,fname=NAME,save_errorlog=True)
 
-def Testing(x_t):
+def Testing(x_t, NAME):
     # ネットワークの構築
     model = MetaRNN()
 
+    loadDir = './models/' + NAME + '/' + NAME + '.pkl'
+
     # 学習済みのネットワークパラメータを読み込む
-    model.load('./models/RNN_minibatch_DALL_MSPT_BPTT-1_Short/RNN_minibatch_DALL_MSPT_BPTT-1_Short.pkl')
+    model.load(loadDir)
 
     # Plot
     PlotOutput(model, x_t, HandlingData.RANGE['MOTOR'])
@@ -99,13 +99,16 @@ if __name__ == '__main__':
     
     # 読み込んだ操り試技データを学習用に整
     HandlingData = ShorteningTimeStep(HandlingData)
+#     x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
     x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
 #    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV'])
 #    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR'])
     x_t, x_tp1 = ReshapeForRNN_minibatch(x_t, x_tp1)
 
+    NAME='RNN_minibatch_D204060_MSPT_Short'
+
     # 学習
-    Learning(x_t, x_tp1)
+    Learning(x_t, x_tp1, NAME)
     
     # テスト
-#    Testing(x_t)
+#    Testing(x_t, NAME)
