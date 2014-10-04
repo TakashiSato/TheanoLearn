@@ -11,11 +11,12 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import *
 import logging
 import cPickle as pickle
+import seaborn as sns
 
 logger = logging.getLogger(__name__)
 plt.rc('figure.subplot',left=0.1,right=0.94,hspace=0,wspace=0,bottom=0.1,top=0.94)
 
-def PlotErrorlog(errorlog, max_epoch=None, save=False):
+def PlotErrorlog(errorlog, max_epoch=None, min_error_axis=None,save=False, fileName=""):
     fig = plt.figure()
 
     epoch = errorlog[:,0]
@@ -32,6 +33,8 @@ def PlotErrorlog(errorlog, max_epoch=None, save=False):
     else:
         index = get_index(epoch, max_epoch)
                 
+    if not min_error_axis:
+        min_error_axis = 1e-5
 
     plt.close('all')
     errorplt = plt.plot(epoch[0:index], errors[0:index])
@@ -39,12 +42,18 @@ def PlotErrorlog(errorlog, max_epoch=None, save=False):
     plt.xlabel('Epoch')
     plt.ylabel('Mean Square Error')
 #    plt.xlim(0,p)
-    plt.ylim(1e-5,1)
+    plt.ylim(min_error_axis,1)
 
     if save is True:
-        date_obj = datetime.datetime.now()
-        date_str = date_obj.strftime('%Y-%m-%d-%H:%M:%S')
-        plt.savefig(date_str+'.png', transparent=True)
+        if fileName == "":
+            date_obj = datetime.datetime.now()
+            date_str = date_obj.strftime('%Y-%m-%d-%H:%M:%S')
+            savename = "ErrorLog_" + date_str + '.png'
+        else:
+            savename = "ErrorLog_" + fileName + '.png'
+        plt.savefig(savename)#, transparent=True)
+        print "Save:", savename
+        
     else:
         plt.show()
         
@@ -63,6 +72,10 @@ def load(path):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
-#    errorlog = load('./models/NN_DALL_MSPT_Short/NN_DALL_MSPT_Short_Errorlog.pkl')
-    errorlog = load('../RecurrentNeuralNetwork_Theano/models/RNN_minibatch_DALL_MSPT_BPTT-1_Short/RNN_minibatch_DALL_MSPT_BPTT-1_Short_Errorlog.pkl')
-    PlotErrorlog(errorlog, 10000, save=True)
+    ESTIMATOR = "RNN"
+    NAME='RNN_minibatch_D204060_MSPT_Short_f'
+    
+    loadDir = '../' + ESTIMATOR + '/models/' + NAME + '/' + NAME + '_Errorlog.pkl'
+
+    errorlog = load(loadDir)
+    PlotErrorlog(errorlog, max_epoch=300000, min_error_axis=1e-4, save=True, fileName=NAME)

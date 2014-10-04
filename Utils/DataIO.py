@@ -10,16 +10,18 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import *
 # plt.rc('figure.subplot',left=0.08,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
 plt.rc('figure.subplot',left=0.05,right=0.982,hspace=0,wspace=0,bottom=0.05,top=0.970)
+import seaborn as sns
 
 #===============================================================================
 # Learning File Directories
 #===============================================================================
 # LEARNING_FILE_DIR = ['../../AnalysisData/debug']
-# LEARNING_FILE_DIR = ['../../AnalysisData/2012/D40/Success']
-# LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D40/Success']
-LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
-                     '../../AnalysisData/funabashi/D40/Success',\
-                     '../../AnalysisData/funabashi/D60/Success']
+#LEARNING_FILE_DIR = ['../../AnalysisData/NNControlData/20141001']
+#LEARNING_FILE_DIR = ['../../AnalysisData/2012/D30/Success']
+LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D60/Success']
+# LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
+#                      '../../AnalysisData/funabashi/D40/Success',\
+#                      '../../AnalysisData/funabashi/D60/Success']
 # LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
 #                      '../../AnalysisData/funabashi/D30/Success',\
 #                      '../../AnalysisData/funabashi/D40/Success',\
@@ -575,14 +577,16 @@ def CalculateObjectSize(handlingData, contactCenterPos):
 
     # ヒストグラム描画
 #     plt.subplot(2,1,1)
-#     plt.hist(objectSize_ftd, bins=50, range=(0,80))
-#     plt.text(60, .8, 'Mean' + str(numpy.mean(objectSize_ftd)))
-#     plt.text(60, .5,'Var ' + str(numpy.var(objectSize_ftd)))
+    sns.distplot(objectSize_ftd)
+    plt.xlim(0,80)
+    plt.text(60, .02, 'Mean' + str(numpy.mean(objectSize_ftd)))
+    plt.text(60, .01,'Var ' + str(numpy.var(objectSize_ftd)))
 #     plt.subplot(2,1,2)
-#     plt.hist(objectSize, bins=50, range=(0,80))
-#     plt.text(60, .8, 'Mean' + str(numpy.mean(objectSize)))
-#     plt.text(60, .5,'Var ' + str(numpy.var(objectSize)))
-#     plt.show()
+#     sns.distplot(objectSize)
+#     plt.xlim(0,80)
+#     plt.text(60, .02, 'Mean' + str(numpy.mean(objectSize)))
+#     plt.text(60, .01,'Var ' + str(numpy.var(objectSize)))
+    plt.show()
 
     # 学習用に整形
     objectSize_ftd = numpy.tile(objectSize_ftd[:,numpy.newaxis], handlingData.shape[1])
@@ -602,7 +606,7 @@ def LoadHandlingData(loadDirs=LEARNING_FILE_DIR):
     CP = []
     for loadDir in loadDirs:
         handlingData = LoadFile(loadDir)
-
+        
         # タクタイル圧力情報から接触中心位置を推定
         contactCenterPos, contactCell = EstimateContactCellPosition(handlingData);
         CP.append(contactCell)
@@ -727,12 +731,15 @@ def PlotData(handlingData, dataRange):
     dataRange = numpy.array(dataRange)
     sequences = handlingData.shape[0]
     step = handlingData.shape[1]
-    col = 4.0
+
+    col = 4
+    if col > sequences:
+        col = sequences
     
     if sequences > 20:
         row = 5
     else:
-        row = int(math.ceil(sequences / col))
+        row = int(math.ceil(float(sequences) / col))
         
     for seq in xrange(sequences):
         if (seq % 20) == 0:
@@ -807,7 +814,7 @@ if __name__ == '__main__':
     
 #     PlotData(handlingData.data[0], handlingData.RANGE["MOTOR"])
 #     PlotData(handlingData.data[0], handlingData.RANGE["SIXAXIS"])
-#    PlotData(handlingData.data[0], handlingData.RANGE["PSV"])
+#     PlotData(handlingData.data[0], handlingData.RANGE["PSV"])
 #     PlotData(handlingData.data[0], handlingData.RANGE["TACTILE"])
     
 #    for i in xrange(5):

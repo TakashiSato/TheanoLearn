@@ -124,6 +124,7 @@ def ReshapeOutputDataForSendToHost(motorData):
 
 def SetInitialPose(com, div=10):
     initMotor = np.array([10000, 9000, 3500, 400, 6900, 0, 3200])
+#     initMotor = np.array([10000, 9300, 3500, 400, 6900, 0, 3800])
 
     print "!!!!! Initialize Motor after 1 sec !!!!!"
     time.sleep(1)
@@ -158,7 +159,9 @@ if __name__ == '__main__':
     global CONTROL_TIME
 
     # 学習済みネットワークを呼び出す
-    model = PrepNetwork('NN_D204060_MSPT_Short_batch100_f')
+    model = PrepNetwork('NN_D204060_MSPTS_Short_batch100_f')    # 14/10/01 BEST!
+#     model = PrepNetwork('NN_D204060_MSPTS_batch100f_m500_lr9999')   # No Good
+#     model = PrepNetwork('NN_D204060_MSPT_Short_batch100_f')
     
     # Hostと通信を行うインスタンスを用意
     com = HostCommunication()
@@ -212,7 +215,7 @@ if __name__ == '__main__':
         # Real Time Control部分
         if rtcFlag is True:
             # Hostから受信した現在のハンドパラメータをネットワークへ入力できる形に整形
-            inputData = ReshapeRecvDataForNetwork(com.CUR_TWHAND, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTILE'])#, 'SIZE'])
+            inputData = ReshapeRecvDataForNetwork(com.CUR_TWHAND, inputType=['MOTOR', 'SIXAXIS', 'PSV', 'TACTILE', 'SIZE'])
              
             # 学習済みのネットワークにハンドパラメータの現在値を入力し(t+1)の出力を得る
             outputData = model.predict(inputData)

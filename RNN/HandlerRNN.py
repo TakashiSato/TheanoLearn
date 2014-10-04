@@ -14,7 +14,8 @@ from DataIO import LoadHandlingData, PrepLearningData, ReshapeForRNN_minibatch, 
 from RNN import MetaRNN
 
 logger = logging.getLogger(__name__)
-plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+# plt.rc('figure.subplot',left=0.03,right=0.982,hspace=0,wspace=0,bottom=0.03,top=0.985)
+plt.rc('figure.subplot',left=0.05,right=0.982,hspace=0,wspace=0,bottom=0.05,top=0.970)
 
 #===============================================================================
 # Methods
@@ -60,7 +61,7 @@ def Learning(x_t, x_tp1, NAME):
     model = MetaRNN(n_in=x_t.shape[2], n_hidden=100, n_out=x_tp1.shape[2],
                     truncated_num=-1,
                     learning_rate=0.001, learning_rate_decay=0.99999,
-                    n_epochs=100000, t_error = 1e-6, batch_size=batch_size,
+                    n_epochs=1000000, t_error = 1e-6, batch_size=batch_size,
                     activation='tanh', L2_reg=1e-4,
                     snapshot_every=10000, snapshot_path='./models/tmp/'+NAME)
 
@@ -99,13 +100,13 @@ if __name__ == '__main__':
     
     # 読み込んだ操り試技データを学習用に整
     HandlingData = ShorteningTimeStep(HandlingData)
-#     x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
-    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
+    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE','SIZE'])
+#     x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV','TACTILE'])
 #    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR','SIXAXIS','PSV'])
 #    x_t, x_tp1 = PrepLearningData(HandlingData,['MOTOR'])
     x_t, x_tp1 = ReshapeForRNN_minibatch(x_t, x_tp1)
 
-    NAME='RNN_minibatch_D204060_MSPT_Short'
+    NAME = 'RNN_minibatch_D204060_MSPTS_Short_f'
 
     # 学習
     Learning(x_t, x_tp1, NAME)
