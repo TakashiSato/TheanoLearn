@@ -16,9 +16,9 @@ import seaborn as sns
 # Learning File Directories
 #===============================================================================
 # LEARNING_FILE_DIR = ['../../AnalysisData/debug']
-#LEARNING_FILE_DIR = ['../../AnalysisData/NNControlData/20141001']
+LEARNING_FILE_DIR = ['../../AnalysisData/NNControlData/20141001']
 #LEARNING_FILE_DIR = ['../../AnalysisData/2012/D30/Success']
-LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D60/Success']
+#LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D60/Success']
 # LEARNING_FILE_DIR = ['../../AnalysisData/funabashi/D20/Success',\
 #                      '../../AnalysisData/funabashi/D40/Success',\
 #                      '../../AnalysisData/funabashi/D60/Success']
@@ -577,16 +577,16 @@ def CalculateObjectSize(handlingData, contactCenterPos):
 
     # ヒストグラム描画
 #     plt.subplot(2,1,1)
-    sns.distplot(objectSize_ftd)
-    plt.xlim(0,80)
-    plt.text(60, .02, 'Mean' + str(numpy.mean(objectSize_ftd)))
-    plt.text(60, .01,'Var ' + str(numpy.var(objectSize_ftd)))
+#     sns.distplot(objectSize_ftd)
+#     plt.xlim(0,80)
+#     plt.text(60, .02, 'Mean' + str(numpy.mean(objectSize_ftd)))
+#     plt.text(60, .01,'Var ' + str(numpy.var(objectSize_ftd)))
 #     plt.subplot(2,1,2)
 #     sns.distplot(objectSize)
 #     plt.xlim(0,80)
 #     plt.text(60, .02, 'Mean' + str(numpy.mean(objectSize)))
 #     plt.text(60, .01,'Var ' + str(numpy.var(objectSize)))
-    plt.show()
+#     plt.show()
 
     # 学習用に整形
     objectSize_ftd = numpy.tile(objectSize_ftd[:,numpy.newaxis], handlingData.shape[1])

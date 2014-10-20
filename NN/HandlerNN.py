@@ -106,7 +106,7 @@ def Testing(x_t, NAME='', plotNum=None):
     model.load(loadDir)
 
     # Plot
-    PlotOutput(model, x_t, HandlingData.RANGE['MOTOR'], plotNum=plotNum)
+#    PlotOutput(model, x_t, HandlingData.RANGE['MOTOR'], plotNum=plotNum)
 #    PlotOutput(model, x_t, HandlingData.RANGE['SIXAXIS'])
 #    PlotOutput(model, x_t, HandlingData.RANGE['SIXAXIS'][0:6])
 #    PlotOutput(model, x_t, HandlingData.RANGE['SIXAXIS'][6:12])
